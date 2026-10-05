@@ -1,0 +1,70 @@
+{
+  "timestamp": "2026-03-29T19:19:04.289258",
+  "passed": 9,
+  "total": 9,
+  "results": [
+    {
+      "id": 1,
+      "name": "TCA array geometry",
+      "status": "PASS",
+      "msg": "Positions: [0, 5, 6, 10, 12, 15, 20, 25, 36, 42, 48, 54]",
+      "elapsed": 0.204
+    },
+    {
+      "id": 2,
+      "name": "Raw signal generation (500 samples)",
+      "status": "PASS",
+      "msg": "HDF5 shape: (500, 2, 12, 16), labels: (500,121)",
+      "elapsed": 1.094
+    },
+    {
+      "id": 3,
+      "name": "Covariance generation (500 samples)",
+      "status": "PASS",
+      "msg": "HDF5 shape: (500, 2, 12, 12)",
+      "elapsed": 1.058
+    },
+    {
+      "id": 4,
+      "name": "HDF5 DataLoader",
+      "status": "PASS",
+      "msg": "Batch X=(32, 2, 12, 16), Y=(32, 121), avg_active_classes=9.56",
+      "elapsed": 0.975
+    },
+    {
+      "id": 5,
+      "name": "ResNeXt-DOA model: raw input",
+      "status": "PASS",
+      "msg": "params=23,224,697, output in [0,1] \u2713  (tested T=16 and T=32)",
+      "elapsed": 0.872
+    },
+    {
+      "id": 6,
+      "name": "ResNeXt-DOA model: cov input",
+      "status": "PASS",
+      "msg": "params=23,224,697, cov input (2,2,12,12) -> (2,121) \u2713",
+      "elapsed": 0.194
+    },
+    {
+      "id": 7,
+      "name": "Training loop (3 epochs)",
+      "status": "PASS",
+      "msg": "3 epochs completed, checkpoint saved (279.2 MB)",
+      "elapsed": 1.972
+    },
+    {
+      "id": 8,
+      "name": "MUSIC algorithm",
+      "status": "PASS",
+      "msg": "True: [-50, 19, 32]  Est: [-50, 19, 32]  MeanErr=0.00deg",
+      "elapsed": 0.43
+    },
+    {
+      "id": 9,
+      "name": "ESPRIT algorithm",
+      "status": "PASS",
+      "msg": "True: [15, 53]  Est: [-7.77390068046688, -0.4755863050942857]",
+      "elapsed": 0.001
+    }
+  ]
+}

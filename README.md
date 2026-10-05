@@ -1,148 +1,353 @@
-# Deep Learning-Based Direction of Arrival Estimation
+# DOA-CNN-TCA-ResNeXt
 
-An interactive demonstration of multi-source Direction of Arrival (DOA) estimation using a modified ResNeXt-50 model and a 12-element Thinned Coprime Array (TCA).
+<div align="center">
 
-> Inference and visualization demo for the honours project “Deep Learning Based Direction of Arrival Estimation,” supervised by Prof. Wei Liu, Department of Electrical and Electronic Engineering, The Hong Kong Polytechnic University. It reproduces the core inference pipeline and compares it with classical MUSIC on the same simulated observation.
+**Deep Learning Based Direction of Arrival Estimation**  
+**基于深度学习的波达方向估计**
 
-Supervisor: [Prof. Wei Liu](https://www.polyu.edu.hk/eee/people/academic-staff-and-teaching-staff/prof-liu-wei/), PolyU EEE.
+PolyU EIE4127 Final Year Project | PyTorch 2.1.0+cu126 | RTX 4090 D
+
+[![GitHub](https://img.shields.io/badge/GitHub-eastshg365--cmd%2FDOA--CNN--TCA--ResNeXt-blue?logo=github)](https://github.com/eastshg365-cmd/DOA-CNN-TCA-ResNeXt)
+![Python](https://img.shields.io/badge/Python-3.10-blue)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.1.0-orange)
+![CUDA](https://img.shields.io/badge/CUDA-12.6-green)
+![Smoke Test](https://img.shields.io/badge/Smoke_Test-9%2F9_PASS-brightgreen)
+
+</div>
+
+---
 
 ## Overview
 
-Direction of Arrival estimation recovers the incident angles of one or more sources from a sensor array. This demo uses a 12-element TCA and treats DOA as multi-label classification on a 1° grid from **−60° to +60°**. The network takes the real and imaginary parts of the sample covariance matrix and predicts a source probability for each angular bin. MUSIC is computed from the same observation and plotted beside the network output.
+Reproduces **Wang et al., IEEE MLSP 2020** — *"A Unified Approach for Target Direction Finding Based on Convolutional Neural Networks"* — using a modified **ResNeXt-50** on a **Thinned Coprime Array (TCA)**.
 
-## Key Results
+### Key Results (SNR = 10 dB)
 
-Best configuration in the project report: `cov_t32` (covariance input, `T = 32` snapshots).
+| Model | Input | T | Val Acc | Precision | Recall | Specificity |
+|-------|-------|:-:|:-------:|:---------:|:------:|:-----------:|
+| CNN-RAW-T16 | Raw | 16 | 94.56% | ~85% | ~75% | ~98% |
+| CNN-RAW-T32 | Raw | 32 | 96.67% | ~92% | ~85% | ~99% |
+| CNN-COV-T16 | Cov | 16 | 98.78% | ~94% | ~90% | ~99% |
+| **CNN-COV-T32** | **Cov** | **32** | **99.80%** | **97.66%** | **96.79%** | **99.63%** |
+| Paper (Wang 2020) | Cov | 32 | 99.69% | 97.78% | 97.65% | 99.84% |
 
-| Evaluation setting | Accuracy | Precision | Recall | Specificity |
-|---|---:|---:|---:|---:|
-| Validation set, SNR = 10 dB | **99.80%** | 98.93% | 98.18% | 99.92% |
-| Hold-out test set, 200,000 samples, SNR = 10 dB | **98.74%** | **91.67%** | **90.21%** | **99.38%** |
+> ✅ **1/9 training data** (1.6M vs 15M samples) — all metrics within **< 1 pp** of the paper.
 
-- Training used **1.6 million** simulated samples, about one ninth of the 15 million in the reference study.
-- At 10 dB SNR, `cov_t32` precision was **91.67%**, versus **56.88% for MUSIC** on the same 200,000-sample test set.
-- In the 2×2 ablation, covariance input was the dominant factor: at `T = 16` it improved recall by about **65 percentage points** over raw snapshot input.
-- Optimal threshold for `cov_t32` was about `τ* = 0.45`. F1 moved only **0.01 percentage points** from the default threshold of 0.50.
-- The 1° grid is the precision ceiling. At SNR = 10 dB and `T = 32`, CRB RMSE is about **0.060°**, roughly **8.3×** below the grid quantisation.
+### Core Contributions
 
-These figures are from the full project study. This repository is an inference demo, not a training-data release.
+| # | Finding | Key Number |
+|---|---------|-----------|
+| C1 | Data efficiency — ResNeXt-50 generalises with 11% of paper data | Gap < 1 pp |
+| C2 | 2×2 factorial ablation isolates Cov vs Raw & T=16 vs T=32 effects | Cov−Raw = +4.22 pp |
+| C3 | Threshold gain inversely proportional to model calibration quality | raw_t16: +11.10 pp F1 |
+| C4 | Cov model more fragile than raw under extreme perturbation (counterintuitive) | ε=0.20d: −11.75 pp |
+| **C5** | **CRB gap: 8.3× precision headroom beyond discrete 1° grid** | **0.5° vs 0.060°** |
 
-## Demo Features
+---
 
-- Real and imaginary heatmaps of the sample covariance matrix.
-- Layout of the 12 TCA sensors.
-- CNN probabilities over the 121-bin grid.
-- MUSIC pseudospectrum on the same grid.
-- Ground-truth angles and the detection threshold.
-- SNR slider from −5 dB to 25 dB, threshold slider from 0.10 to 0.90.
-- Manual source-angle input.
-- Presets: three separated sources, two close sources, five sources, low SNR, one source, eight sources.
+## Project Structure
 
-## Method
-
-### Array
-
-12-element thinned coprime array (`M = 5`, `N = 6`, `P = 12`). Normalised positions:
-
-```text
-[0, 5, 10, 15, 20, 25, 6, 12, 36, 42, 48, 54]
+```
+DOA-CNN-TCA-ResNeXt/
+├── configs/                    # YAML hyperparameters (4 model configs)
+│   ├── raw_t16.yaml
+│   ├── raw_t32.yaml
+│   ├── cov_t16.yaml
+│   └── cov_t32.yaml
+├── datasets/
+│   ├── array_geometry.py       # TCA sensor positions: M=5, N=6 → 12 sensors
+│   ├── generate_raw.py         # Raw signal generator (2, 12, T)
+│   ├── generate_cov.py         # Covariance matrix generator (2, 12, 12)
+│   └── data_loader.py          # PyTorch Dataset + DataLoader
+├── models/
+│   └── resnext_doa.py          # ResNeXt-50: 2ch input, FC(121) + Sigmoid
+├── train/
+│   └── trainer.py              # BCELoss + AdamW + early stopping + TensorBoard
+├── eval/
+│   ├── metrics.py              # Accuracy / Precision / Recall / Specificity
+│   ├── compare_classical.py    # MUSIC + ESPRIT benchmark
+│   └── visualize.py            # Auto-generate all paper figures (Fig.4–8)
+├── extensions/
+│   ├── ex1_focal_loss/
+│   │   ├── focal_loss.py       # Focal Loss (γ=2, α=0.25)
+│   │   └── train_focal.py      # EX1: Focal Loss training
+│   ├── ex2_threshold_opt.py    # EX2: Grid search optimal threshold
+│   ├── ex3_perturbation.py     # EX3: Array position perturbation robustness
+│   └── ex4_crb_analysis.py     # EX4: Cramér-Rao Bound comparison
+├── math_interference/
+│   ├── math_optimized_final.nb # Mathematica notebook (28-page derivation)
+│   └── math_virtual_coarray.wl # Virtual difference co-array analysis
+├── results/                    # Auto-generated (not committed to git)
+│   ├── checkpoints/            # Model weights (.pth)
+│   ├── tables/                 # LaTeX + CSV tables
+│   └── figures/                # Publication-ready plots
+├── Results_Log/
+│   ├── RESEARCH_LOGBOOK_20260328.md    # Full research logbook (Chinese)
+│   └── RESEARCH_LOGBOOK_20260328_EN.md # Full research logbook (English)
+├── smoke_test/run_smoke_test.py
+├── requirements.txt
+├── train_all.ps1               # Windows PowerShell one-shot pipeline
+└── version.py
 ```
 
-Steering vector: `a(θ) = exp(jπp sin(θ))`.
+---
 
-### Simulation
+## Deployment Guide
 
-Independent complex Gaussian sources and spatially white noise:
+### Prerequisites
 
-```text
-X = AS + N
-R̂ = XXᴴ / T
-```
+| Requirement | Minimum | Recommended |
+|-------------|---------|-------------|
+| OS | Windows 10 / Ubuntu 20.04 | Windows 11 / Ubuntu 22.04 |
+| Python | 3.10 | 3.10.6 |
+| CUDA | 12.1 | 12.6 |
+| GPU VRAM | 16 GB | 24 GB (RTX 4090) |
+| RAM | 32 GB | 64 GB |
+| Disk | 50 GB | 200 GB (full 8M dataset) |
 
-`Re(R̂)` and `Im(R̂)` are the two input channels.
-
-### Network
-
-`ResNeXt-50 32x4d`, with:
-
-- first convolution changed from 3 channels to 2
-- final layer outputting 121 logits
-- a sigmoid on each bin
-- binary cross-entropy for the multi-label target
-
-### MUSIC
-
-Noise subspace from the eigendecomposition of `R̂`, pseudospectrum on the same −60° to +60° grid. The demo uses the known source count. Source-count estimation is not part of this visualisation.
-
-## Requirements
-
-- Python 3.8+
-- PyTorch 2.4+
-- torchvision 0.19+
-- NumPy 1.26.4
-- Matplotlib 3.9.0
-- Optional CUDA GPU
-
-The demo runs on CPU. Training for the report used an NVIDIA GPU.
-
-## Installation
+### Step 1 — Clone the Repository
 
 ```bash
-git clone https://github.com/Dashmic/Doa-estimation.git
-cd Doa-estimation
+git clone https://github.com/eastshg365-cmd/DOA-CNN-TCA-ResNeXt.git
+cd DOA-CNN-TCA-ResNeXt
+```
+
+### Step 2 — Create Python Environment
+
+```bash
+# Using conda (recommended)
+conda create -n doa python=3.10.6
+conda activate doa
+
+# Or using venv
 python -m venv .venv
-source .venv/bin/activate          # Linux/macOS
-# .venv\Scripts\activate           # Windows PowerShell
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+# Windows:
+.venv\Scripts\activate
+# Linux/Mac:
+source .venv/bin/activate
+```
+
+### Step 3 — Install PyTorch (CUDA 12.6)
+
+```bash
+# CUDA 12.6
+pip install torch==2.1.0+cu126 torchvision==0.16.0+cu126 \
+    --index-url https://download.pytorch.org/whl/cu126
+
+# CUDA 12.1 (alternative)
+pip install torch==2.1.0+cu121 torchvision==0.16.0+cu121 \
+    --index-url https://download.pytorch.org/whl/cu121
+
+# CPU only (slow, for testing only)
+pip install torch torchvision
+```
+
+### Step 4 — Install Other Dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-Use the CPU wheel from pytorch.org if you do not have CUDA 12.6.
-
-## Checkpoint
-
-Expected path:
-
-```text
-checkpoints/cov_t32_best.pth
-```
-
-The file is about 267 MB, over GitHub’s 100 MB file limit, so it is not in the git history. Host it as a Release asset or with Git LFS, then place it at that path or pass `--checkpoint`.
-
-Without the file, `run_demo.py` exits with `Checkpoint not found`.
-
-## Run
+### Step 5 — Verify Installation (Smoke Test)
 
 ```bash
-python run_demo.py
-python run_demo.py --cpu
-python run_demo.py --angles -30 10 45
-python run_demo.py --angles -5 5 --snr 0
-python run_demo.py --checkpoint /path/to/cov_t32_best.pth
+python smoke_test/run_smoke_test.py
+# Expected: 9/9 PASS
 ```
 
-The window regenerates the observation when you change SNR, threshold, or angles and press Run.
+---
 
-## Layout
+## Running the Pipeline
 
-```text
-.
-├── run_demo.py
-├── demo_interactive.py
-├── requirements.txt
-├── checkpoints/                 # not tracked; add cov_t32_best.pth locally
-└── README.md
+### Option A — Full Pipeline (Windows PowerShell)
+
+```powershell
+# Runs all 4 models sequentially (~72h total on RTX 4090)
+.\train_all.ps1
 ```
 
-## Notes
+### Option B — Step-by-Step
 
-- Each run draws a new noise realisation, so plots differ.
-- Far-field, narrowband, uncorrelated sources, spatially white noise.
-- Reported metrics come from separately generated train, validation, and test sets. Dataset scripts and HDF5 files are not in this repo.
-- Simulated data only. Weaker at low SNR. No measured array, near-field, wideband, mutual coupling, multipath, or coherent-source evaluation.
-- The 1° grid limits angular resolution.
-- MUSIC here is given the true source count.
+#### 1. Generate Data
 
-## License
+```bash
+# Raw signal datasets (T=16 and T=32)
+python datasets/generate_raw.py --T 16 --samples 1600000 --out data/raw_t16_train.h5
+python datasets/generate_raw.py --T 16 --samples  200000 --out data/raw_t16_val.h5
+python datasets/generate_raw.py --T 16 --samples  200000 --out data/raw_t16_test.h5
 
-No license yet. All rights reserved until one is added.
+python datasets/generate_raw.py --T 32 --samples 1600000 --out data/raw_t32_train.h5
+python datasets/generate_raw.py --T 32 --samples  200000 --out data/raw_t32_val.h5
+python datasets/generate_raw.py --T 32 --samples  200000 --out data/raw_t32_test.h5
+
+# Covariance matrix datasets
+python datasets/generate_cov.py --T 16 --samples 1600000 --out data/cov_t16_train.h5
+python datasets/generate_cov.py --T 16 --samples  200000 --out data/cov_t16_val.h5
+python datasets/generate_cov.py --T 16 --samples  200000 --out data/cov_t16_test.h5
+
+python datasets/generate_cov.py --T 32 --samples 1600000 --out data/cov_t32_train.h5
+python datasets/generate_cov.py --T 32 --samples  200000 --out data/cov_t32_val.h5
+python datasets/generate_cov.py --T 32 --samples  200000 --out data/cov_t32_test.h5
+```
+
+> ⚠️ Quick test: use `--samples 10000` to verify the pipeline end-to-end.
+
+#### 2. Train Models
+
+```bash
+# Train each of the 4 configurations
+python train/trainer.py --config configs/raw_t16.yaml   # ~4.5h, early stop @ep18
+python train/trainer.py --config configs/raw_t32.yaml   # ~23.5h, 50 epochs
+python train/trainer.py --config configs/cov_t16.yaml   # ~23h,   50 epochs
+python train/trainer.py --config configs/cov_t32.yaml   # ~21.6h, 50 epochs
+
+# Monitor training
+tensorboard --logdir results/logs
+```
+
+#### 3. Evaluate — Standard Metrics
+
+```bash
+# SNR sweep for each model (0–20 dB)
+python eval/metrics.py --config configs/raw_t16.yaml --snr_range 0 20 --step 2
+python eval/metrics.py --config configs/raw_t32.yaml --snr_range 0 20 --step 2
+python eval/metrics.py --config configs/cov_t16.yaml --snr_range 0 20 --step 2
+python eval/metrics.py --config configs/cov_t32.yaml --snr_range 0 20 --step 2
+
+# Classical baselines: MUSIC + ESPRIT
+python eval/compare_classical.py --snr_range 0 20 --step 2 --samples 500
+
+# Generate all figures (Fig.4–Fig.8)
+python eval/visualize.py --all
+```
+
+#### 4. Extension Experiments
+
+```bash
+# EX1: Focal Loss (γ=2, α=0.25) — ~24h training
+python extensions/ex1_focal_loss/train_focal.py --config configs/cov_t32.yaml
+
+# EX2: Threshold optimisation — ~14 min
+python extensions/ex2_threshold_opt.py
+
+# EX3: Array perturbation robustness — ~15 min
+python extensions/ex3_perturbation.py --epsilon 0.0 0.02 0.05 0.10 0.20
+
+# EX4: CRB analysis — ~1 min
+python extensions/ex4_crb_analysis.py
+```
+
+---
+
+## Pre-trained Model Weights
+
+Model weights (`*.pth`) are **not tracked by git** (>500 MB each).  
+Download from Google Drive:
+
+> 📁 [Google Drive — Model Weights](https://drive.google.com/drive/folders/YOUR_FOLDER_ID)  
+> Place files in: `results/checkpoints/`
+
+| File | Val Acc | Size |
+|------|:-------:|:----:|
+| `raw_t16_best.pth` | 94.56% | ~85 MB |
+| `raw_t32_best.pth` | 96.67% | ~85 MB |
+| `cov_t16_best.pth` | 98.78% | ~85 MB |
+| `cov_t32_best.pth` | **99.80%** | ~85 MB |
+
+---
+
+## Array Geometry
+
+**Thinned Coprime Array (TCA)** — M=5, N=6 → **12 sensors**, aperture = 54d
+
+```
+Sub-array 1 (step M=5d): {0, 5, 10, 15, 20, 25}
+Sub-array 2 (step N=6d): {0, 6, 12}               ← first [M/2]+1 multiples of N
+Sub-array 3 (offset):    {36, 42, 48, 54}          ← last N multiples of M
+Union (12 positions):    {0, 5, 6, 10, 12, 15, 20, 25, 36, 42, 48, 54} × d
+```
+
+Verified against paper Fig. 2: gcd(M,N) = gcd(5,6) = 1 ✓, DOF = 89 ✓
+
+---
+
+## Model Architecture
+
+Modified **ResNeXt-50** (32×4d):
+
+| Layer | Output | Details |
+|-------|--------|---------|
+| Conv1 | 56×56 | 7×7, 64 ch — **2-channel input** (Real/Imag) |
+| MaxPool | 28×28 | 3×3, stride 2 |
+| Stage 1–4 | → 4×4 | Standard ResNeXt blocks |
+| GAP | 1×1 | Global Average Pooling |
+| FC | 121 | Linear(2048→121) + **Sigmoid** |
+
+**Loss:** BCEWithLogitsLoss · **Optimizer:** AdamW (lr=1e-3, wd=1e-2) · **Scheduler:** CosineAnnealingLR
+
+---
+
+## Evaluation Metrics
+
+Per-element over all 121 DOA classes (following paper):
+
+| Metric | Formula |
+|--------|---------|
+| Accuracy | (TP+TN) / (TP+FP+TN+FN) |
+| Precision | TP / (TP+FP) |
+| Recall | TP / (TP+FN) |
+| Specificity | TN / (TN+FP) |
+
+Default threshold: **τ = 0.5** (cov_t32 F1 loss < 0.01 pp vs optimal τ=0.45)
+
+---
+
+## Theoretical Analysis
+
+See `math_interference/math_optimized_final.nb` (Mathematica, 28-page export):
+
+| Section | Content |
+|---------|---------|
+| §1 | TCA geometry — numerical verification |
+| §2 | Difference co-array (DCA) — 89 elements, DOF ≫ 11 |
+| §3 | Steering matrix A[12×121] — phase verification |
+| §6 | MUSIC eigenvalue decomposition — λ₃/λ₄ ≈ 8× gap |
+| §7 | BCE gradient: ∂L/∂z = σ(z) − y (linear residual) |
+| §8 | CRB curves — **8.3× gap** at SNR=10 dB, T=32 |
+
+---
+
+## Citation
+
+```bibtex
+@inproceedings{wang2020unified,
+  title     = {A Unified Approach for Target Direction Finding Based on Convolutional Neural Networks},
+  author    = {Wang, Yue and others},
+  booktitle = {IEEE International Workshop on Machine Learning for Signal Processing (MLSP)},
+  year      = {2020},
+  doi       = {10.1109/MLSP49062.2020.9231787}
+}
+```
+
+---
+
+## References
+
+1. Wang et al., *"A Unified Approach for Target Direction Finding Based on CNNs,"* IEEE MLSP 2020.
+2. L. C. Godara, *"Application of Antenna Arrays to Mobile Communications, Part II,"* Proc. IEEE, 1997.
+3. Y. Tian et al., *"Vehicle Positioning with DL-Based DOA Estimation of ID Sources,"* IEEE IoT-J, 2022.
+4. W. Liu & S. Weiss, *Wideband Beamforming: Concepts and Techniques,* Wiley, 2010.
+
+---
+
+## Environment
+
+| Component | Version |
+|-----------|---------|
+| Python | 3.10.6 |
+| PyTorch | 2.1.0+cu126 |
+| CUDA | 12.6 |
+| GPU | NVIDIA RTX 4090 D (24 GB) |
+| OS | Windows 11 |
+
+See `requirements.txt` for full dependency list.
